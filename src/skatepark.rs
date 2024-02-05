@@ -37,7 +37,52 @@ impl Skatepark {
         self.m_possible_tricks.reserve(max_combination as usize);
         self.m_possible_tricks_time_trick.reserve(max_combination as usize);
 
-        
+        self.m_possible_tricks.push(Vec::new());
+        self.m_possible_tricks_time_trick.push(0);
+
+        for i in 1..max_combination as usize {
+            let mut sub_vec: Vec<Trick> = Vec::new();
+            let mut sum: u64 = 0;
+
+            for j in 0..self.m_tricks.len() {
+                if i >> j & 1 == 1 {
+                    sub_vec.push(self.m_tricks.get(j).unwrap().clone());
+                    sum += self.m_tricks.get(j).unwrap().get_time_trick() as u64;
+                }
+            }
+
+            self.m_possible_tricks.push(sub_vec);
+            self.m_possible_tricks_time_trick.push(sum);
+        }
+
+        self.m_radical.reserve(max_combination as usize);
+        for _ in 0..max_combination as usize {
+            self.m_radical.push(vec![i64::MIN; self.m_sections.len()]);
+        }
+
+        self.m_radical_used.reserve(max_combination as usize);
+        for _ in 0..max_combination as usize {
+            self.m_radical_used.push(vec![0; self.m_sections.len()])
+        }
+
+        self.m_tricks_sum.reserve(max_combination as usize);
+        for _ in 0..max_combination as usize {
+            self.m_tricks_sum.push(vec![i64::MIN; max_combination as usize]);
+        }
+    }
+
+    fn sum_penalized_tricks(&self, used_m: u16, m: u16) -> i64 {
+        let mut sum: i64 = 0;
+
+        let trick_size = self.m_tricks.len();
+        for i in 0..trick_size {
+            if (used_m >> i & 1) & (m >> i & 1) == 1 {
+                sum += self.m_tricks[i].get_baseline_score() as i64 / 2;
+            } else if m >> i & 1 == 1 {
+                sum += self.m_tricks[i].get_baseline_score() as i64;
+            }
+        }
+        sum
     }
 
     pub fn more_radical_crossing(&mut self) -> (i64, Vec<Vec<Trick>>) {
@@ -47,7 +92,70 @@ impl Skatepark {
 
         self.start_values();
 
+        let mut max_section: i64;
+        let max_combination = self.m_possible_tricks.len();
         
-        return (0, Vec::new());
+        for used_m in 0..max_combination {
+            max_section = 0;
+            let mut max_m: u16 = 0;
+
+            for m in 0..max_combination {
+                if self.m_possible_tricks_time_trick[m] > self.m_sections.last().unwrap().get_crossing_time() as u64 {
+                    continue;
+                }
+
+                let mut sum: i64 = self.sum_penalized_tricks(used_m as u16, m as u16);
+                self.m_tricks_sum[used_m][m] = sum;
+                
+                sum *= self.m_possible_tricks[m].len() as i64 * self.m_sections.last().unwrap().get_bonus_factor() as i64;
+
+                if max_section < sum {
+                    max_section = sum;
+                    max_m = m as u16;
+                }
+            }
+            self.m_radical[used_m][self.m_sections.len() - 1] = max_section;
+            self.m_radical_used[used_m][self.m_sections.len() - 1] = max_m;
+        }
+
+        for i in (0..=self.m_sections.len() - 2).rev() {
+            for used_m in 0..max_combination {
+                max_section = 0;
+                let mut max_m: u16 = 0;
+                
+                for m in 0..max_combination {
+                    if self.m_possible_tricks_time_trick[m] > self.m_sections[i].get_crossing_time() as u64 {
+                        continue;
+                    }
+
+                    let mut sum: i64;
+                    if self.m_tricks_sum[used_m][m] == i64::MIN {
+                        sum = self.sum_penalized_tricks(used_m as u16, m as u16);
+                        self.m_tricks_sum[used_m][m] = sum;
+                    } else {
+                        sum = self.m_tricks_sum[used_m][m];
+                    }
+                    
+                    sum *= self.m_possible_tricks[m].len() as i64 * self.m_sections[i].get_bonus_factor() as i64;
+                    sum += self.m_radical[m][i + 1];
+                    
+                    if max_section < sum {
+                        max_section = sum;
+                        max_m = m as u16;
+                    }
+                }
+                self.m_radical[used_m][i] = max_section;
+                self.m_radical_used[used_m][i] = max_m;
+            }
+        } 
+
+        let mut vec: Vec<Vec<Trick>> = Vec::new();
+        let mut j: u16 = 0;
+        for i in 0..self.m_sections.len() {
+            j = self.m_radical_used[j as usize][i];
+            vec.push(self.m_possible_tricks[j as usize].clone());
+        }
+
+        (self.m_radical[0][0], vec)
     }
 }

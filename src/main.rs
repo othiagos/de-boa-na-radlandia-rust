@@ -50,7 +50,15 @@ fn main() {
     }
     park.add_tricks(tricks);
 
-    park.more_radical_crossing();
-    
+    let (max_value, trick_sequence) = park.more_radical_crossing();
+
+    println!("{}", max_value);
+    for vec in trick_sequence {
+        print!("{} ", vec.len());
+        for trick in vec {
+            print!("{} ", trick.get_index() + 1);
+        }
+        println!("");
+    }
 
 }
